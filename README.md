@@ -1,37 +1,46 @@
 # Mac MCP Bridge
 
-Mac MCP Bridge is an adaptation of [kstost/cokacremote](https://github.com/kstost/cokacremote), adding local terminal OAuth approval, single-connection control, a terminal dashboard, macOS screen capture, original PNG image return, and bounded output. The original project and contributors retain their MIT license notice in [LICENSE](LICENSE).
+ChatGPT를 비롯한 MCP 클라이언트에서 Mac이나 Linux 호스트의 명령 실행, 파일 작업, 이미지 조회를 할 수 있게 연결하는 도구입니다. Mac에서는 터미널에서 연결을 승인하고, 남은 연결 시간을 확인하거나 연결을 해제할 수 있습니다.
 
-Mac MCP Bridge lets ChatGPT or another MCP client work directly on a Mac or remote Linux host.
+이 프로젝트는 **[kstost/cokacremote](https://github.com/kstost/cokacremote)를 바탕으로 일부 기능과 사용 흐름을 변용한 프로젝트**입니다. 원본의 실행·파일 관리 기능에 터미널 OAuth 승인, 단일 연결 제한, 간단한 대시보드, macOS 화면 캡처, 원본 PNG 반환, 출력량 제어를 추가했습니다. 원본 기여자의 MIT 저작권 고지를 [LICENSE](LICENSE)에 보존했습니다.
 
-In simple terms, it gives an AI client tools to do things you would normally do over SSH: run shell commands, inspect logs, edit files, install packages, build projects, and manage services.
+[영문 참고 문서](README.en.md)
 
-MCP stands for **Model Context Protocol**. It is a standard that lets an AI client call tools provided by another program. You do not need to understand the protocol internals to use `cokacremote`.
+## 어떤 일을 할 수 있나요?
+
+- 셸 명령과 스크립트 실행, 프로젝트 빌드 및 테스트
+- 파일 읽기·쓰기·수정·이동·삭제와 업로드·다운로드
+- 오래 실행되는 명령의 출력 조회, 입력 전달, 종료
+- PNG 이미지를 크기 변경이나 재압축 없이 반환
+- Mac의 전체 화면, 특정 창, 지정 영역 캡처
+
+MCP(Model Context Protocol)는 AI 클라이언트가 외부 프로그램의 도구를 호출하는 규약입니다. 이 서버는 총 **23개 도구**를 제공합니다.
 
 ```text
-ChatGPT or another MCP client
-            |
-            | MCP over HTTPS
-            v
-       cokacremote
-            |
-            v
-       Linux server
-       |- run commands
-       |- read/write files
-       |- install packages
-       |- build and test code
-       `- manage processes and services
+ChatGPT 또는 MCP 클라이언트
+          │ HTTPS / MCP
+          ▼
+    Mac MCP Bridge
+          │
+          ▼
+    Mac 또는 Linux 호스트
+    ├─ 명령·스크립트 실행
+    ├─ 파일 읽기·쓰기
+    └─ 이미지 조회·화면 캡처
 ```
 
-You can run `cokacremote` continuously on a VPS or EC2 instance and connect to it remotely over MCP Streamable HTTP.
+> **접근 권한 안내:** 승인된 클라이언트는 서버를 실행한 OS 사용자의 권한으로 작업합니다. 작업 폴더는 시작 위치이며 접근 제한이 아닙니다. 샌드박스나 명령별 승인 기능은 없고, 파일 삭제 및 임의 명령 실행이 가능합니다. 신뢰하는 클라이언트에만 연결을 승인하세요.
 
-> [!WARNING]
-> `cokacremote` is intentionally powerful. It has no sandbox, command allowlist, execution approval, or path restrictions. If the service runs as `root`, an authenticated MCP client can change or delete anything on the server. Use HTTPS, strong authentication, and only connect trusted clients.
+## Mac에서 시작하기
 
-## macOS quick start
+### 준비 사항
 
-Install Node.js 22 or newer and ngrok, configure ngrok with your own account and HTTPS domain, then run:
+- Node.js 22 이상과 npm
+- ngrok 설치 및 본인 계정 인증, 사용할 HTTPS 도메인
+- Git
+- 화면 캡처를 사용하려면 macOS 14 이상, Xcode Command Line Tools, 서버를 실행하는 앱의 화면 기록 권한
+
+### 설치와 실행
 
 ```bash
 git clone https://github.com/CJH1594/mac-mcp-bridge.git
@@ -40,357 +49,204 @@ npm ci
 ./start.sh
 ```
 
-Enter your ngrok HTTPS URL and working directory when prompted. Connect an MCP client to the displayed `/mcp` URL. The macOS screenshot tools require screen recording permission and macOS 14 or newer.
+실행 과정에서 다음을 입력합니다.
 
-## Linux quick start
+1. 본인의 ngrok HTTPS 주소: 예를 들어 `https://your-domain.ngrok-free.dev`
+2. 작업 폴더: 처음 실행할 때의 기본값은 홈 폴더입니다.
 
-If you already have a Linux server and Node.js 22+, the shortest local test is:
+`start.sh`는 서버를 빌드하고 ngrok 터널을 연 다음 승인 대시보드를 표시합니다. MCP 클라이언트에는 화면에 표시되는 `/mcp` 주소를 등록하세요.
+
+주소를 환경 변수로 지정할 수도 있습니다.
+
+```bash
+MCP_PUBLIC_URL=https://your-domain.ngrok-free.dev ./start.sh
+```
+
+이전에 선택한 작업 폴더를 다시 사용하려면 다음과 같이 실행합니다. ngrok 주소는 환경 변수로 제공하지 않으면 다시 입력해야 합니다.
+
+```bash
+MCP_PUBLIC_URL=https://your-domain.ngrok-free.dev ./start.sh --reuse-last
+```
+
+### 연결 승인
+
+1. MCP 클라이언트에서 OAuth 연결을 시작합니다.
+2. 브라우저 승인 페이지에서 클라이언트 이름과 콜백 주소를 확인합니다. 이름은 클라이언트가 직접 보낸 값이며 실제 기기 신원을 보증하지 않습니다.
+3. 브라우저에 표시된 요청번호를 **2분 안에 Mac 터미널에 입력**합니다.
+4. 요청번호를 입력하면 즉시 승인되고, 원래 브라우저가 OAuth 콜백으로 돌아갑니다.
+
+별도의 `approve` 명령은 필요하지 않습니다. 거절하려면 `deny 요청번호`를 입력합니다.
+
+### 대시보드 명령
+
+| 입력 | 동작 |
+|---|---|
+| 요청번호 | 해당 연결을 즉시 승인 |
+| `deny 요청번호` | 대기 중인 연결 거절 |
+| `stop` | 연결 권한 폐기, 실행 작업 정리 후 새 연결 대기 |
+| `reset time` | 유효한 연결의 남은 시간을 현재 시점부터 6시간으로 초기화 |
+| `help` | 도움말 표시 |
+| Enter | 도움말 닫기 |
+| Ctrl+C | 앱 종료 및 실행 작업 정리. 발급된 연결 권한은 유지 |
+
+연결 후에는 요청번호와 남은 시간만 표시합니다. 시간은 30초마다 갱신하며, 실제 온라인 여부가 아니라 **승인 유효시간**을 뜻합니다.
+
+### 연결 제한과 재시작
+
+- 터미널 모드에서는 승인된 연결을 **한 개만** 허용합니다. 다른 클라이언트로 바꾸려면 먼저 `stop`을 입력하세요.
+- 최초 승인 유효시간은 기본 6시간입니다. 토큰 갱신, 서버 재시작, 일시적인 터널 끊김으로 시간이 늘어나지 않습니다.
+- `reset time`을 직접 입력한 경우에만 유효한 연결의 기한을 다시 6시간으로 설정합니다. 만료된 연결은 새로 승인해야 합니다.
+- 일반 종료 후 재시작하면 기존 승인과 클라이언트 등록은 유지됩니다. 실행 중이던 명령과 메모리에 보관하던 출력은 복구되지 않습니다.
+- `stop`으로 폐기한 토큰은 재시작 후에도 사용할 수 없습니다. 정리에 실패하면 접근을 차단한 상태로 오류를 표시하며, 원인을 해결한 뒤 `stop`으로 재시도할 수 있습니다.
+- 브라우저 승인이 끝나기 전에 서버를 재시작했다면 예약된 승인만 남을 수 있습니다. `stop` 후 연결을 다시 시작하세요.
+- 연결 제한은 OAuth 승인 단위입니다. 같은 토큰을 다른 물리적 기기에 복사한 경우까지 식별하는 기능은 아닙니다.
+
+## 제공하는 도구
+
+| 분류 | 도구 |
+|---|---|
+| 명령·프로세스 | `exec_command`, `run_script`, `write_stdin`, `read_process`, `terminate_process`, `list_processes` |
+| 파일 조회 | `list_directory`, `stat_path`, `read_file`, `download_file`, `hash_file` |
+| 파일 변경 | `write_file`, `replace_in_file`, `apply_patch`, `upload_file`, `make_directory`, `copy_path`, `move_path`, `remove_path`, `chmod_path` |
+| 이미지·화면 | `view_image`, `list_capture_targets`, `capture_screenshot` |
+
+상대 경로는 `MCP_DEFAULT_CWD`를 기준으로 해석합니다. 절대 경로와 `~/...`도 사용할 수 있습니다. `remove_path`는 휴지통을 거치지 않고 삭제하며, `apply_patch`는 호스트의 `git apply --unsafe-paths`를 사용합니다.
+
+### 이미지와 화면 캡처
+
+`view_image`는 PNG를 검증한 뒤 원본 바이트를 MCP 이미지 콘텐츠로 반환합니다. 파일 크기와 픽셀 수 제한을 적용하지만 크기를 줄이거나 재압축하지 않습니다.
+
+먼저 `list_capture_targets`로 디스플레이·창 ID를 확인한 뒤, `capture_screenshot`의 `target`에 다음 중 하나를 전달합니다.
+
+```json
+{"kind":"display","displayId":1}
+```
+
+```json
+{"kind":"window","windowId":123}
+```
+
+```json
+{"kind":"region","displayId":1,"x":0,"y":0,"width":320,"height":240}
+```
+
+ID는 예시입니다. 영역 좌표와 크기는 선택한 디스플레이의 왼쪽 위를 기준으로 한 논리 좌표이고, 반환되는 이미지 크기는 픽셀 단위입니다.
+
+내장 캡처 도구는 macOS 14 이상에서 동작합니다. `npm run build`가 Swift 도우미를 컴파일하며, 실제 캡처에는 로그인된 데스크톱 세션과 화면 기록 권한이 필요합니다. 권한이 없으면 오류를 반환하며 캡처 요청이 권한 팝업을 자동으로 띄우지는 않습니다.
+
+### 출력량과 이어 읽기
+
+프로세스 출력과 파일 읽기는 기본 **32 KiB**씩 반환합니다.
+
+- 파일은 반환된 `nextOffset`을 다음 요청의 `offset`으로 전달합니다.
+- 프로세스는 반환된 `nextSeq`를 다음 `read_process` 요청의 `afterSeq`로 전달합니다.
+- `outputFormat: "compact"`는 중복된 `stdout`·`stderr`를 생략하고 합쳐진 `output`을 제공합니다.
+- `read_process`의 `view: "tail"`은 마지막 부분, `view: "failure"`는 최근 표준 오류와 마지막 문맥을 우선 반환합니다. 이 두 보기에서는 이어 읽기 커서를 진행시키지 않습니다.
+- `cursorGap: true`이면 이전 출력 일부가 보관 제한으로 제거된 상태입니다.
+
+UTF-8 파일은 문자 중간에서 끊지 않으므로 요청 크기를 최대 3바이트 초과할 수 있습니다. 잘못된 UTF-8은 오류로 처리하며, 바이너리 파일은 `encoding: "base64"`로 읽습니다.
+
+## Linux에서 실행하기
+
+Node.js 22 이상, npm, Git이 필요합니다. Python 스크립트를 실행하려면 Python 3도 설치해야 합니다.
 
 ```bash
 git clone https://github.com/CJH1594/mac-mcp-bridge.git
 cd mac-mcp-bridge
-npm install
+npm ci
 npm run build
 
+export MCP_HOST=127.0.0.1
 export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
-export MCP_DEFAULT_CWD=/root
+export MCP_DEFAULT_CWD="$HOME"
 npm start
 ```
 
-The server starts on port `3000` by default.
+이 예시는 로컬 서버를 정적 Bearer 인증으로 실행합니다. 요청에 `Authorization: Bearer <MCP_AUTH_TOKEN>` 헤더가 필요합니다. 외부 연결에는 HTTPS 주소와 해당 인증 방식을 지원하는 클라이언트가 필요합니다.
 
-- MCP endpoint: `http://127.0.0.1:3000/mcp`
-- Health check: `http://127.0.0.1:3000/health`
+상시 운영용 systemd·Nginx 설정은 [deploy](deploy/)에 있습니다. 배포 절차와 프록시 설정은 [영문 배포 안내](README.en.md#vpsec2-deployment)를 참고하세요. 소스만 복사해 빌드할 때는 빌드 스크립트가 있는 `scripts/` 폴더도 포함해야 합니다.
 
-For a remote MCP connection over the public internet, you will normally also need:
+Docker와 Cloudflare Tunnel을 사용하는 구성은 [tunneling 안내](tunneling/README.md)를 참고하세요. Linux에서는 기본 macOS 화면 캡처 기능을 사용할 수 없습니다.
 
-1. A public HTTPS domain such as `https://mcp.example.com`
-2. Nginx or another reverse proxy in front of the Node.js service
-3. An authentication method supported by the client, such as OAuth 2.1 or a Bearer token
-4. The MCP URL added to the client, for example `https://mcp.example.com/mcp`
+## 인증과 MCP 연결
 
-The full deployment steps and a ChatGPT-specific connection example are explained later in this README.
+서버는 정적 Bearer 토큰과 OAuth 인증을 지원합니다. OAuth는 동적 클라이언트 등록(DCR), Authorization Code + PKCE(S256), 리소스 검증, 갱신 토큰 회전과 재사용 탐지, 토큰 폐기를 제공합니다.
 
-## What can it do?
-
-Typical tasks include:
-
-- "Show me the current RAM and disk usage."
-- "Find why Nginx is returning 502."
-- "Edit this config file and restart the service."
-- "Clone this Git repository and run its tests."
-- "Install Node.js packages and build the project."
-- "Upload a file, verify its hash, and move it into place."
-
-Internally, these actions are provided through 20 MCP tools for shell execution, long-running processes, and filesystem operations.
-
-## How it works
-
-With `cokacremote`:
-
-1. An MCP client sends an MCP request over HTTPS.
-2. `cokacremote` checks authentication.
-3. It runs the requested tool directly on the host server.
-4. The command output or file-operation result is returned to the client.
-
-The MCP transport is stateless, but long-running command sessions are kept in memory so they can be polled or controlled across multiple requests.
-
-## Key features
-
-- Shell commands, complete scripts, builds, tests, package installation, Git, and service management
-- Output polling, stdin delivery, and termination control for long-running processes
-- Read, write, edit, transfer, and delete host files, including absolute paths
-- Built-in static Bearer authentication and OAuth 2.1/DCR/PKCE for compatible MCP clients
-- Stateless JSON transport per request, per-process output retention, and response size limits
-- systemd and Nginx deployment examples for Linux VPS/EC2 environments
-
-## Available tools
-
-### Execution and processes
-
-- `exec_command`: Run shell commands, builds, tests, package installation, Git, service management, and log inspection
-- `run_script`: Run complete scripts with Bash, sh, Node.js, Python, or an arbitrary interpreter
-- `write_stdin`: Write input to a long-running process and retrieve subsequent output
-- `read_process`: Poll output using a cursor and inspect process termination state
-- `terminate_process`: Send `SIGINT`, `SIGTERM`, or `SIGKILL` to a managed process group
-- `list_processes`: List running or recently completed process sessions
-
-### Filesystem
-
-- `list_directory`, `stat_path`, `read_file`, `write_file`
-- `replace_in_file`, `apply_patch`
-- `upload_file`, `download_file`, `hash_file`
-- `make_directory`, `copy_path`, `move_path`, `remove_path`, `chmod_path`
-
-Relative paths are resolved from `MCP_DEFAULT_CWD`, while absolute paths and `~/...` paths are also allowed. Uploads and downloads use base64 chunk transfer with `nextOffset`.
-
-The server provides 23 tools in total. `remove_path` permanently deletes targets without using a trash folder, and `apply_patch` uses the host's `git apply --unsafe-paths`.
-
-### Images and screen capture
-
-- `view_image({path, cwd?})` returns an original PNG as MCP image content plus dimensions and byte size. It validates PNG data and applies separate byte/pixel budgets without resizing or recompression. Image Base64 occurs only in the image content block.
-- `list_capture_targets()` lists display/window IDs, bounds in logical points, and display scale.
-- `capture_screenshot({target})` accepts `{kind:"display", displayId}`, `{kind:"window", windowId}`, or `{kind:"region", displayId, x, y, width, height}`. Region coordinates are logical points relative to the selected display's top-left; returned image dimensions are pixels. Targets must still exist when captured.
-
-Built-in screen capture requires macOS 14+, an interactive desktop session, and Screen & System Audio Recording permission for the app running the server. `npm run build` compiles the Swift ScreenCaptureKit helper on macOS; the Xcode Command Line Tools are needed to build it. For development, build the helper once with `node scripts/build-native.mjs`. Other hosts return `capture_unsupported`; `MCP_SCREEN_CAPTURE_HELPER` can select a compatible custom executable. The helper accepts one JSON argument (`operation: "list"` or `"capture"` with `target`, `outputPath`, `maxPixels`) and writes JSON metadata or `{code,error}` to stdout, with PNG bytes written only to `outputPath`.
-
-Captures are Managed work: timeout and emergency stop terminate the helper; the capture operation removes its private staging directory on success or failure. Permission denial and unavailable targets return actionable error codes. Capture never prompts for permission interactively.
-
-### Bounded output and diagnostics
-
-Process results and `read_file` default to 32 KiB. The default and maximum are separate settings, so callers can request a larger page explicitly. File UTF-8 reads can cross the requested size by up to three bytes to finish a character. Process byte budgets cover selected raw output, not the complete JSON response.
-
-`exec_command`, `run_script`, `write_stdin`, and `read_process` accept `outputFormat:"compact"`, which returns combined `output` without duplicate `stdout`/`stderr`; the default `legacy` format keeps all three fields. JSON text and `structuredContent` remain available for MCP compatibility.
-
-`read_process` accepts `view:"since"` (default), `"tail"`, or `"failure"`. `since` advances `nextSeq`; tail/failure are diagnostic excerpts and preserve the supplied `afterSeq` as `nextSeq`. The failure view reserves space for recent stderr and fills remaining space with ending context. `returnedRanges`, `omittedBefore`, `omittedBetween`, and `omittedAfter` describe each excerpt. `cursorGap:true` means output before `firstAvailableSeq` has already been discarded by retention and cannot be recovered. Use `nextOffset` for file pages and `nextSeq` for process pages.
-
-### Tool safety and authentication metadata
-
-Every tool explicitly publishes all four MCP safety hints. The values describe the strongest behavior available through that tool, including optional arguments such as `write_file.mode="append"` and `copy_path.force=true`.
-
-| Behavior | Tools | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` |
-|---|---|---:|---:|---:|---:|
-| Read-only, closed world | `list_directory`, `stat_path`, `read_file`, `download_file`, `hash_file`, `read_process`, `list_processes`, `view_image`, `list_capture_targets`, `capture_screenshot` | `true` | `false` | `true` | `false` |
-| Additive and idempotent | `make_directory` | `false` | `false` | `true` | `false` |
-| Destructive and idempotent | `upload_file`, `copy_path`, `move_path`, `remove_path`, `chmod_path` | `false` | `true` | `true` | `false` |
-| Destructive and non-idempotent, closed world | `write_file`, `replace_in_file`, `apply_patch`, `terminate_process` | `false` | `true` | `false` | `false` |
-| Destructive and non-idempotent, open world | `exec_command`, `run_script`, `write_stdin` | `false` | `true` | `false` | `true` |
-
-These annotations are advisory client metadata, not access control. They do not replace authentication, which is enforced by the built-in HTTP layer or an upstream gateway when configured. When built-in OAuth is enabled, every tool advertises the `oauth2` security scheme with the `mcp:tools` scope through `_meta.securitySchemes`. Static-Bearer-only and built-in-auth-disabled (`MCP_ALLOW_NO_AUTH`) deployments intentionally omit this OpenAI extension: a pre-shared Bearer token is neither `noauth` nor `oauth2`, while disabling built-in authentication may represent a deliberately anonymous endpoint, upstream authentication, or private-network access. The process cannot infer that external policy honestly, so authentication, if any, remains connection- or deployment-level.
-
-### File reading and transfer rules
-
-- `offset`, `bytesRead`, and `nextOffset` returned by `read_file` are all byte offsets or byte counts.
-- With `encoding="utf8"`, multibyte characters such as Korean text and emoji are never split across chunk boundaries. `bytesRead` may exceed the requested `maxBytes` by up to 3 bytes when necessary to include one complete character, but it never exceeds the server's `MCP_MAX_FILE_CHUNK_BYTES` limit.
-- Invalid UTF-8 is rejected instead of silently replacing invalid bytes. Read binary files with `encoding="base64"`.
-- Base64 input for `write_file` and `upload_file` is strictly validated for alphabet, length, and padding. Standard base64 without padding is also accepted, while invalid input is rejected before the file is modified.
-- `write_file.fileMode` applies both to new files and when overwriting or appending to existing files.
-- `copy_path` returns a conflict error for both files and directories when the destination already exists and `force=false`.
-
-## Transport and state model
-
-`/mcp` is a stateless Streamable HTTP JSON endpoint where every request is handled independently.
-
-- Each `POST /mcp` request is handled with a new MCP transport and does not issue or require an `Mcp-Session-Id`.
-- If an older client sends a stale `Mcp-Session-Id` header, the server ignores it for request processing.
-- An authenticated `GET /mcp` or `DELETE /mcp` request returning `405 Method Not Allowed` is expected. Missing or invalid authentication may produce `401 Unauthorized` before the request reaches that method check. The server does not maintain a server-push SSE session.
-- MCP transport sessions and command process `sessionId` values are unrelated. A process `sessionId` returned by `exec_command` can be reused by later HTTP requests to `write_stdin`, `read_process`, and `terminate_process`.
-- Running and retained process state is stored in service memory and is lost when the service restarts.
-- Process `running`/exit state is separate from resource cleanup: a process may have exited while its temporary files are still being removed. Normal close and emergency stop wait for all managed work cleanup. Cleanup failures are reported; admission remains blocked, and the next close or stop retries unfinished cleanup without repeating successful cleanup.
-- Output retention and capacity eviction may forget a completed process session, but cannot discard its pending cleanup responsibility.
-- For `terminate_process` with `SIGINT` or `SIGTERM`, a positive `graceMs` is the maximum delay before `SIGKILL`. On POSIX, parent exit finishes the requested process-group termination immediately and retires the escalation timer. Zero disables escalation; an explicit `SIGKILL` is still immediate.
-
-## Requirements
-
-- Node.js 22 or later and npm
-- Linux recommended; the provided production deployment examples target systemd and Nginx
-- Git for `apply_patch`
-- OpenSSL for key generation
-- Python 3 if Python execution through `run_script` is needed
-- A stable, publicly accessible HTTPS domain when connecting directly from ChatGPT
-
-## Local development
-
-The Quick Start above is enough to run a normal local instance. If you are changing the source code itself, development mode automatically watches the TypeScript entry point:
-
-```bash
-export MCP_HOST=127.0.0.1
-export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
-npm run dev
-```
-
-## Authentication
-
-When `MCP_AUTH_TOKEN` is set, every MCP request requires the following header:
-
-```http
-Authorization: Bearer <MCP_AUTH_TOKEN>
-```
-
-You can also enable the built-in OAuth 2.1 Authorization Server for compatible OAuth-capable MCP clients, including ChatGPT. The following values are environment-file examples, not shell commands:
-
-```dotenv
-MCP_OAUTH_ENABLED=true
-MCP_OAUTH_APPROVAL_KEY=<separate-value-generated-with-openssl-rand-hex-32>
-MCP_PUBLIC_URL=https://mcp.example.com
-MCP_OAUTH_ISSUER=https://mcp.example.com
-MCP_OAUTH_RESOURCE=https://mcp.example.com/mcp
-MCP_OAUTH_STATE_FILE=/var/lib/remote-dev-mcp/oauth-state.json
-```
-
-When enabled, the server provides:
-
-- RFC 9728 Protected Resource Metadata
-- RFC 8414 Authorization Server Metadata
-- Dynamic Client Registration (DCR)
-- Authorization Code + PKCE (S256)
-- `resource` audience validation
-- Access tokens, replay-detecting refresh token rotation, and grant-level token revocation
-
-OAuth uses a single `mcp:tools` scope. Enter the `MCP_OAUTH_APPROVAL_KEY` value on the approval page shown when authorizing an OAuth client connection. For OAuth-only deployments, it is recommended to leave `MCP_AUTH_TOKEN` empty so there is no permanent static Bearer bypass path. For backward compatibility, `MCP_AUTH_TOKEN` is used as the approval key when no dedicated approval key is configured, but keeping the two values separate is safer. Treat both values like root credentials. Registered clients, client secrets, and token hashes are stored in `MCP_OAUTH_STATE_FILE` with mode `600`.
-
-For interactive local use, `./start.sh` builds the server and opens the configured ngrok tunnel with **terminal approval**. It prompts for your ngrok HTTPS URL (or accepts `MCP_PUBLIC_URL` from the environment), remembers the working directory, requires no approval password, and disables ngrok's local HTTP inspection. The first default working directory is your home directory. The working directory remains a starting directory, not an access restriction.
-
-1. Start an OAuth connection in the browser. Its approval page displays a request number.
-2. Verify the client name and callback on the browser approval page and that you initiated the connection. Client names are self-reported.
-3. Enter the request number in the Mac terminal to approve immediately, or enter `deny NUMBER` to reject. Requests expire after two minutes and can be decided only once. The original browser automatically continues to its OAuth callback; there is no public HTTP approval endpoint.
-4. Type `stop` to disconnect: revoke every OAuth token and pending approval, terminate server-managed processes, and return to waiting for a new connection. Reconnection is allowed only after revocation and cleanup succeed. If either fails, access stays blocked; resolve the reported problem and enter `stop` again to retry. Old tokens stay revoked after restarting.
-5. While connected, `reset time` sets the approval deadline to six hours from now. `help` shows instructions; Enter closes them.
-
-The terminal dashboard shows only the folder, address, connection instructions, and help before approval. After approval it shows the request number, remaining approval time, and connection commands. Remaining time refreshes every 30 seconds; it describes permission validity, not whether the remote client is currently online. Client names on the browser approval page are self-reported and do not prove device identity.
-
-Terminal mode permits **one approved connection at a time**, including the interval before the browser exchanges its code. Approval reserves that connection durably; a second approval cannot take it over, even after a restart. Use `stop` before switching clients. On upgrade, if the old state contains multiple live grants, only the grant with the latest approval deadline remains usable. OAuth Bearer credentials identify that approved connection; copying its tokens to another physical device cannot be detected by this limit.
-
-Terminal approval can also be selected with `MCP_OAUTH_APPROVAL_MODE=terminal` and `MCP_OAUTH_ENABLED=true`. It requires an interactive stdin and rejects a nonempty `MCP_AUTH_TOKEN`, which would otherwise bypass local approval. `MCP_OAUTH_APPROVAL_KEY` is unused in this mode. The existing password approval flow remains available as `MCP_OAUTH_APPROVAL_MODE=key` (the default), including for unattended deployments.
-
-An approved OAuth session initially lasts **six hours from approval**, controlled by `MCP_OAUTH_SESSION_TTL_SECONDS=21600`. Terminal mode defaults to ten-minute access tokens; refreshing a token, restarting, and interrupting the tunnel do not extend the approval deadline. Only an explicit local `reset time` command resets an unexpired approval to six hours from now, including its refresh-token deadline; it cannot revive an expired connection. Ordinary Ctrl+C shutdown preserves issued grants and client registrations; it still terminates server-managed work. To connect after the session expires, approve a new OAuth connection without registering the client again. Tokens from older versions without a session deadline require one new approval when upgrading; registered clients are preserved.
-
-Terminal approval does not sandbox an approved client or add per-command prompts. File and command tools retain the server user's full host access. Disconnect terminates currently managed process groups; it cannot undo filesystem changes or stop independent OS services that a command has installed or detached from those groups. Authentication secrets loaded at process startup are removed from the environment before commands are executed. A restart during an unfinished browser callback loses its pending request/code while preserving the reserved approval; use `stop`, then start that connection again.
-
-Application control owns request admission, normal close, and emergency stop. HTTP and terminal adapters share this control; normal close preserves approvals and is safe to call repeatedly. The approval module owns the inspect-before-decide rule and the deadline used by its browser cookie. Host execution owns command and script startup, initial results, and managed executable calls, including both `git apply` phases, so patch processes are visible to `list_processes` and can be stopped with other work.
-
-All automated tests, fault injection, executable fixtures, and diagnostics live under `test/`. Restart fixtures own a dedicated Undici Agent and their HTTP/MCP clients per server generation: keep-alive is reused within a generation, and restart retires the old clients and pool before creating the next generation. The `undici` development dependency is used only by tests. The runtime modules and `start.sh` contain no test branches or test commands. See [GLOSSARY.md](GLOSSARY.md) for the distinction between an approved session and a process session.
-
-OAuth-related HTTP routes:
-
-| Path | Purpose |
+| 모드 | 용도 |
 |---|---|
-| `/.well-known/oauth-protected-resource` | RFC 9728 resource metadata |
-| `/.well-known/oauth-protected-resource/mcp` | Resource metadata for the `/mcp` path |
-| `/.well-known/oauth-authorization-server` | RFC 8414 authorization server metadata |
-| `/register` | Dynamic Client Registration |
-| `/authorize` | User approval and authorization code issuance |
-| `/oauth/approval/:id` | Original-browser approval status and callback delivery in terminal mode |
-| `/token` | Authorization code / refresh token exchange |
-| `/revoke` | Token revocation |
+| `MCP_OAUTH_APPROVAL_MODE=terminal` | 로컬 터미널에서 요청번호로 승인. `start.sh`가 사용하는 방식 |
+| `MCP_OAUTH_APPROVAL_MODE=key` | 브라우저에서 승인 키를 입력. 터미널 없이 운영하는 서버용 기본 모드 |
 
-If authentication is handled by an OAuth proxy or private network in front of the server, the built-in authentication checks can be disabled:
+터미널 모드는 대화형 터미널이 필요하고, 정적 토큰으로 승인을 우회하지 못하도록 `MCP_AUTH_TOKEN` 설정을 허용하지 않습니다. 승인 키 방식은 `MCP_OAUTH_APPROVAL_KEY`를 사용합니다. 등록 정보와 토큰 해시는 `MCP_OAUTH_STATE_FILE`에 저장되며 파일 권한은 `600`입니다.
 
-```dotenv
-MCP_AUTH_TOKEN=
-MCP_OAUTH_ENABLED=false
-MCP_ALLOW_NO_AUTH=true
-```
+ChatGPT 등 OAuth 지원 MCP 클라이언트에는 공개 주소의 `/mcp` 엔드포인트를 등록합니다. 등록 방식을 선택할 수 있다면 DCR을 사용하고, 요청 범위는 `mcp:tools`입니다. 이 서버는 DCR을 제공하며 CIMD나 OIDC는 제공하지 않습니다. 클라이언트의 연결 메뉴와 사용 가능한 도구는 계정·워크스페이스 정책에 따라 달라질 수 있습니다.
 
-`MCP_ALLOW_NO_AUTH=true` does not enable anonymous mode while `MCP_AUTH_TOKEN` remains set or OAuth is enabled. When using an external IdP or OAuth gateway, bind the Node.js server only to `127.0.0.1` and complete authentication at the upstream layer. Exposing an unauthenticated MCP server to the public internet allows anyone who knows the URL to use the instance with the server process's full privileges.
+| HTTP 경로 | 역할 |
+|---|---|
+| `/mcp` | MCP 요청 처리 |
+| `/health` | 서버 상태 확인 |
+| `/.well-known/oauth-protected-resource`, `/.well-known/oauth-protected-resource/mcp` | 리소스 메타데이터 |
+| `/.well-known/oauth-authorization-server` | 인증 서버 메타데이터 |
+| `/register` | 클라이언트 등록 |
+| `/authorize` | 연결 승인 시작 |
+| `/oauth/approval/:id` | 터미널 승인 상태 확인과 원래 브라우저의 콜백 전달 |
+| `/token` | 인증 코드·갱신 토큰 교환 |
+| `/revoke` | 토큰 폐기 |
 
-OpenAI's current remote MCP authentication requirements are documented in [MCP server authentication](https://developers.openai.com/plugins/build/auth).
+인증되지 않은 서버를 인터넷에 공개하면 주소를 아는 사람이 호스트 권한으로 도구를 사용할 수 있습니다. `MCP_ALLOW_NO_AUTH`는 인증을 담당하는 별도 게이트웨이 등 보호 수단이 있는 배포에서만 사용하세요.
 
-## VPS/EC2 deployment
+## 주요 설정
 
-The following example installs the server under `/opt/remote-dev-mcp` on an Ubuntu-based system. The service unit remains named `remote-dev-mcp.service` for backward compatibility.
+전체 설정 예시는 [.env.example](.env.example), 운영 환경 예시는 [deploy/remote-dev-mcp.env.example](deploy/remote-dev-mcp.env.example)에 있습니다. `.env` 예시는 직접 환경 변수로 적용하거나 서비스의 환경 파일로 사용해야 합니다.
 
-```bash
-sudo mkdir -p /opt/remote-dev-mcp
-sudo cp -a package.json package-lock.json tsconfig.json src deploy /opt/remote-dev-mcp/
-cd /opt/remote-dev-mcp
-sudo npm ci
-sudo npm run build
-sudo npm prune --omit=dev
+| 환경 변수 | 기본값 또는 의미 |
+|---|---|
+| `MCP_HOST`, `MCP_PORT` | 직접 실행 기본값은 `0.0.0.0`, `3000`. `start.sh`는 `127.0.0.1` 사용 |
+| `MCP_ENDPOINT` | `/mcp` |
+| `MCP_PUBLIC_URL` | `/mcp`를 제외한 외부 HTTPS 주소 |
+| `MCP_ALLOWED_HOSTS` | 허용할 Host 이름 목록, 쉼표로 구분 |
+| `MCP_TRUST_PROXY_HOPS` | 기본 `0`. 실제 신뢰할 프록시 개수와 일치시켜야 함 |
+| `MCP_AUTH_TOKEN` | 정적 Bearer 토큰 |
+| `MCP_OAUTH_ENABLED` | 기본 `false`. `start.sh`는 `true` |
+| `MCP_OAUTH_APPROVAL_MODE` | 기본 `key`. `start.sh`는 `terminal` |
+| `MCP_OAUTH_APPROVAL_KEY` | 브라우저 승인 키 |
+| `MCP_OAUTH_ISSUER`, `MCP_OAUTH_RESOURCE` | 인증 서버 주소와 MCP 리소스 주소 |
+| `MCP_OAUTH_STATE_FILE` | OAuth 등록 정보와 토큰 해시 저장 경로 |
+| `MCP_OAUTH_SESSION_TTL_SECONDS` | 승인 유효시간, 기본 `21600`초 |
+| `MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS` | 터미널 모드는 기본 `600`초, 그 외 `3600`초. 승인 기한을 넘지 않음 |
+| `MCP_DEFAULT_CWD`, `MCP_DEFAULT_SHELL` | 기본 작업 폴더와 셸 |
+| `MCP_DEFAULT_OUTPUT_BYTES`, `MCP_DEFAULT_FILE_READ_BYTES` | 기본 출력·파일 읽기 크기, 각각 `32768`바이트 |
+| `MCP_MAX_OUTPUT_BYTES`, `MCP_MAX_FILE_CHUNK_BYTES` | 요청당 최대 출력·파일 읽기 크기, 각각 `1048576`바이트 |
+| `MCP_MAX_RETAINED_PROCESS_OUTPUT_BYTES` | 프로세스별 보관 출력, 기본 `4194304`바이트 |
+| `MCP_PROCESS_RETENTION_MS` | 종료된 프로세스 기록 보관 시간, 기본 `3600000`밀리초 |
+| `MCP_MAX_IMAGE_BYTES`, `MCP_MAX_IMAGE_PIXELS` | PNG 제한, 기본 `8388608`바이트와 `16777216`픽셀 |
+| `MCP_SCREEN_CAPTURE_TIMEOUT_MS` | 캡처 제한 시간, 기본 `15000`밀리초 |
+| `MCP_SCREEN_CAPTURE_HELPER` | 호환되는 사용자 지정 캡처 실행 파일 경로 |
 
-sudo install -d -m 0700 /var/lib/remote-dev-mcp
-
-sudo cp deploy/remote-dev-mcp.env.example /etc/remote-dev-mcp.env
-sudo chmod 600 /etc/remote-dev-mcp.env
-sudo editor /etc/remote-dev-mcp.env
-
-sudo cp deploy/remote-dev-mcp.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now remote-dev-mcp
-sudo systemctl status remote-dev-mcp
-```
-
-If `/usr/bin/node` is not the actual Node.js path, update `ExecStart` in the systemd unit. Use `which node` to find the correct path.
-
-HTTPS is required when exposing the server to the public internet. Update the domain and certificate paths in the [Nginx example](deploy/nginx.remote-dev-mcp.conf), prepare a valid certificate, and then enable the configuration. It is recommended to bind the Node.js server to `127.0.0.1` and expose only ports 80/443 externally. Use a sufficiently long proxy read timeout so long-running tool calls are not terminated by the proxy first.
-
-Set `MCP_TRUST_PROXY_HOPS=1` only when exactly one trusted proxy sits in front of the Node.js server, as in the provided Nginx example. Do not reuse that value when exposing the Node.js port directly or when the proxy hop count differs. Incorrectly trusting `X-Forwarded-For` can allow OAuth rate limits to be bypassed.
-
-At minimum, update the following production environment values for your actual domain:
-
-```dotenv
-MCP_HOST=127.0.0.1
-MCP_PUBLIC_URL=https://mcp.example.com
-MCP_ALLOWED_HOSTS=mcp.example.com,127.0.0.1,localhost
-MCP_TRUST_PROXY_HOPS=1
-MCP_AUTH_TOKEN=
-MCP_OAUTH_ENABLED=true
-MCP_OAUTH_APPROVAL_KEY=<value-generated-with-openssl-rand-hex-32>
-MCP_OAUTH_ISSUER=https://mcp.example.com
-MCP_OAUTH_RESOURCE=https://mcp.example.com/mcp
-```
-
-## Connecting ChatGPT
-
-Assume the deployed MCP URL is `https://mcp.example.com/mcp`.
-
-The UI for adding an MCP server can differ by plan and workspace type. OpenAI's current Plugins Quickstart describes a personal developer-mode flow that enables **Settings → Security and login → Developer mode** and then adds the MCP server through ChatGPT Plugins. Business/Enterprise/Edu full-MCP app flows may instead use **Settings → Apps → Advanced Settings** or the administrator path **Workspace Settings → Apps → Create**.
-
-1. Enable **Developer mode** for the account or workspace you are using.
-2. In ChatGPT's Plugins or Apps settings, create a new MCP connection and enter `https://mcp.example.com/mcp` as the MCP URL.
-3. If an OAuth registration method can be selected, choose **Dynamic Client Registration (DCR)**. Because this server provides DCR, you do not need to create a Client ID and Client Secret manually.
-4. Use the `mcp:tools` scope. For a public client flow, the token endpoint authentication method can be `none`.
-5. When the OAuth approval page appears, enter `MCP_OAUTH_APPROVAL_KEY` to approve the connection.
-6. Complete tool discovery or connection verification, then enable the app/plugin.
-
-This server provides DCR and OAuth Authorization Code + PKCE (S256), but does not provide CIMD or OIDC. ChatGPT continues to support DCR, although CIMD may be preferred when an authorization server provides it. For this server, which provides DCR only, use the DCR flow.
-
-Full MCP write/modify capabilities vary by plan and workspace policy. This server includes destructive tools such as file modification, command execution, and deletion, so not every capability will be available if the connection UI restricts tool permissions.
-
-See the official [ChatGPT Plugins Quickstart](https://developers.openai.com/plugins/quickstart), [OpenAI Help Center guide to Developer mode and MCP apps](https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt-beta), and [MCP server authentication](https://developers.openai.com/plugins/build/auth). When using the OpenAI Responses API, see [MCP and Connectors](https://developers.openai.com/api/docs/guides/tools-connectors-mcp) for how to provide the server URL and required authentication information.
-
-## Operations and troubleshooting
+## 상태 확인과 문제 해결
 
 ```bash
-# Check the Node.js service behind the local proxy
 curl http://127.0.0.1:3000/health
-
-# Check the public HTTPS endpoint
-curl https://mcp.example.com/health
-
-# Service status and live logs
-sudo systemctl status remote-dev-mcp
-sudo journalctl -u remote-dev-mcp -f
-
-# Restart after changing configuration or code
-sudo systemctl restart remote-dev-mcp
+curl https://your-domain.ngrok-free.dev/health
 ```
 
-Example healthy response:
+`start.sh`로 실행하면 서버 로그는 `~/.cokacremote/server.log`에 저장됩니다. 로그와 승인 입력을 분리해 ngrok 화면이나 요청 로그가 대시보드를 가리지 않도록 구성했습니다.
 
-```json
-{
-  "status": "ok",
-  "service": "cokacremote",
-  "version": "0.1.0",
-  "transportMode": "stateless-json",
-  "activeMcpSessions": 0,
-  "activeMcpRequests": 0,
-  "managedProcesses": 0,
-  "unrestrictedHostAccess": true,
-  "oauthEnabled": true
-}
-```
+| 상태 | 의미와 확인 방법 |
+|---|---|
+| `activeMcpSessions: 0` | 독립적인 HTTP 요청 방식이므로 정상 |
+| `activeMcpRequests` | 현재 처리 중인 MCP HTTP 요청 수 |
+| `managedProcesses` | 실행 중인 작업과 출력 조회를 위해 보관 중인 종료 작업을 모두 포함. 실제 실행 여부는 `list_processes`의 `running` 확인 |
+| `401 Unauthorized` | 토큰이 없거나 유효하지 않음 |
+| 인증된 `GET /mcp` 또는 `DELETE /mcp`의 `405` | 정상. 도구 호출은 `POST /mcp` 사용 |
+| `403 Host header is not allowed` | `MCP_ALLOWED_HOSTS` 설정 확인 |
+| 승인 대기 중인 요청번호가 없음 | 잘못 입력했거나 2분 유효시간이 지남. 클라이언트에서 새 연결 시작 |
+| 이미 승인된 연결이 있음 | `stop`으로 기존 연결 해제 후 새 연결 승인 |
+| 캡처 권한 오류 | 서버를 실행하는 앱의 macOS 화면 기록 권한 확인 |
 
-- `activeMcpSessions` is always `0` in stateless mode. This does not mean the connection is broken.
-- `activeMcpRequests` is the number of MCP HTTP requests being processed at the time of the health request.
-- `managedProcesses` includes both currently running processes and recently completed processes retained temporarily for output retrieval. Check the `running` field from `list_processes` to determine whether a process is still running. Completed records are removed after `MCP_PROCESS_RETENTION_MS`.
-- Every MCP response includes an `X-Request-Id` for tracing. Service log entries with `event="mcp_request"` record the RPC method, tool name, HTTP status, outcome, and duration without logging authentication tokens or tool arguments.
+일반 재시작은 OAuth 승인을 유지하지만 실행 작업과 메모리 출력은 유지하지 않습니다. 연결 해제나 프로세스 종료는 이미 수행한 파일 변경을 되돌리지 않습니다.
 
-To inspect recent MCP request logs only:
-
-```bash
-sudo journalctl -u remote-dev-mcp -o cat | grep '"event":"mcp_request"'
-```
-
-- `Error fetching OAuth configuration`: Check `MCP_OAUTH_ENABLED`, the public URL, and the Nginx proxy for `/.well-known/` routes.
-- `401 Unauthorized` on MCP requests: Check the Bearer token or OAuth access token.
-- `403 Host header is not allowed`: Add the request domain to `MCP_ALLOWED_HOSTS`.
-- A command returns a `sessionId` instead of completing immediately: Poll it with `read_process` or send input with `write_stdin`.
-- MCP requests are independent stateless POST requests. An authenticated `GET /mcp` or `DELETE /mcp` returning `405 Method Not Allowed` is expected and means the server does not provide a separate SSE stream. Authentication failures may return `401 Unauthorized` first.
-- Service restart behavior: Managed process state and unexchanged authorization codes are lost. OAuth client registrations and issued tokens remain in the state file.
-
-## Verification
+## 개발과 검증
 
 ```bash
 npm run typecheck
@@ -398,113 +254,47 @@ npm test
 npm run build
 ```
 
-The default tests use a real Streamable HTTP MCP client and cover:
+테스트·실행 fixture·진단 코드는 모두 `test/`에 있습니다. 자동 테스트는 실제 MCP 클라이언트를 사용해 인증, 도구 호출, 파일 처리, 프로세스 정리, 재시작, 출력 제한 등을 확인합니다. 화면 캡처 자동 테스트에서는 별도의 실행 fixture를 사용합니다.
 
-- Bearer authentication, stateless request processing, and request tracing headers
-- Success paths, failure paths, and input boundary cases for all 23 tools
-- Interactive stdin, output pagination, timeouts, termination, and completed-process retention
-- UTF-8 character boundaries, strict base64 validation, file modes, and copy/move conflicts
-- Unified diff validation, application, reverse application, and 3-way application
-
-Actual native capture is checked separately using `TMPDIR=/tmp node --import tsx test/diagnostics/screen-capture-smoke.mjs --capture` after building. Automated capture tests use the executable fixture under `test/fixtures` and exercise real managed processes.
-
-### Full E2E verification against a running external MCP server
-
-From a separate source checkout with development dependencies installed, you can verify all 23 tools against a real HTTPS endpoint:
+실제 Mac 화면 캡처 점검:
 
 ```bash
-MCP_E2E_URL='https://mcp.example.com/mcp' \
-MCP_E2E_TOKEN='<bearer-token>' \
-MCP_E2E_ROOT='/tmp/cokacremote-tools-e2e-manual' \
-npx vitest run test/all-tools.integration.test.ts
+TMPDIR=/tmp node --import tsx test/diagnostics/screen-capture-smoke.mjs --capture
 ```
 
-This verification executes real commands on the target server and creates, modifies, and deletes test files. For safety, `MCP_E2E_ROOT` must match the `/tmp/cokacremote-tools-e2e-*` pattern. The test uses only that isolated directory and attempts to clean it afterward. Do not point it at a directory containing production data, and check whether the directory remains after a failed or interrupted test. Running `npm ci` inside the production installation directory may alter its production-only dependency layout, so run tests from a separate checkout instead.
+실행 중인 서버와 외부 ngrok 경로의 OAuth·도구 호출 점검:
 
-## Key environment variables
+```bash
+node --import tsx test/diagnostics/live-mcp-smoke.mjs https://your-domain.ngrok-free.dev --capture
+```
 
-| Variable | Default | Description |
-|---|---:|---|
-| `MCP_HOST` | `0.0.0.0` | HTTP bind address |
-| `MCP_PORT` | `3000` | HTTP port |
-| `MCP_ENDPOINT` | `/mcp` | Streamable HTTP MCP path |
-| `MCP_PUBLIC_URL` | none | External HTTPS base URL excluding `/mcp` |
-| `MCP_ALLOWED_HOSTS` | none | Comma-separated list of allowed Host header hostnames |
-| `MCP_TRUST_PROXY_HOPS` | `0` | Number of trusted reverse-proxy hops; keep `0` when directly exposed |
-| `MCP_AUTH_TOKEN` | none | Optional static Bearer token |
-| `MCP_ALLOW_NO_AUTH` | `false` | Allow startup without authentication |
-| `MCP_OAUTH_ENABLED` | `false` | Enable the built-in OAuth 2.1/DCR authorization server |
-| `MCP_OAUTH_APPROVAL_MODE` | `key` | `key` for password approval; `terminal` for request-specific local approval |
-| `MCP_OAUTH_APPROVAL_KEY` | `MCP_AUTH_TOKEN` | Dedicated key for the OAuth connection approval page |
-| `MCP_OAUTH_ISSUER` | `MCP_PUBLIC_URL` | OAuth issuer URL |
-| `MCP_OAUTH_RESOURCE` | `<MCP_PUBLIC_URL><MCP_ENDPOINT>` | MCP resource audience |
-| `MCP_OAUTH_STATE_FILE` | inside working directory | Stores registered clients and token hashes |
-| `MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS` | `600` in terminal mode; otherwise `3600` | Access token lifetime, capped by the session deadline |
-| `MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS` | `2592000` | Refresh token lifetime, capped by the session deadline |
-| `MCP_OAUTH_AUTHORIZATION_CODE_TTL_SECONDS` | `300` | One-time authorization code lifetime |
-| `MCP_OAUTH_SESSION_TTL_SECONDS` | `21600` | Absolute session lifetime from approval; refresh never extends it |
-| `MCP_DEFAULT_CWD` | server startup directory | Base directory for relative paths |
-| `MCP_DEFAULT_SHELL` | `$SHELL` or `/bin/bash` | Default shell for `exec_command` |
-| `MCP_MAX_REQUEST_BODY` | `8mb` | HTTP request body size limit |
-| `MCP_DEFAULT_OUTPUT_BYTES` | `32768` | Default process output page; clamped default when maximum is smaller |
-| `MCP_MAX_OUTPUT_BYTES` | `1048576` | Maximum raw process output requested in one page |
-| `MCP_MAX_RETAINED_PROCESS_OUTPUT_BYTES` | `4194304` | Retained output per managed process |
-| `MCP_PROCESS_RETENTION_MS` | `3600000` | Retention period for completed processes |
-| `MCP_MAX_PROCESSES` | `128` | Maximum number of retained process sessions |
-| `MCP_DEFAULT_FILE_READ_BYTES` | `32768` | Default read_file page; default is capped by file chunk maximum |
-| `MCP_MAX_FILE_CHUNK_BYTES` | `1048576` | Maximum file chunk size; UTF-8 reads also stay within this limit |
-| `MCP_MAX_EDIT_FILE_BYTES` | `67108864` | Maximum file size for text replacement |
-| `MCP_MAX_IMAGE_BYTES` | `8388608` | Maximum original PNG file bytes |
-| `MCP_MAX_IMAGE_PIXELS` | `16777216` | Maximum decoded/captured image pixels |
-| `MCP_SCREEN_CAPTURE_TIMEOUT_MS` | `15000` | Native helper execution timeout |
-| `MCP_SCREEN_CAPTURE_HELPER` | compiled helper | Optional executable implementing the capture helper contract |
+진단 프로그램이 표시한 요청번호를 실제 서버 터미널에 입력해야 합니다. 테스트 후 해당 연결의 토큰과 임시 파일을 정리합니다. 기존 승인 연결이 있다면 먼저 해제해야 하며, 진단 프로그램이 기존 연결을 임의로 끊지는 않습니다.
 
-## Project layout
+추가 진단 방법은 [test/diagnostics/README.md](test/diagnostics/README.md), 용어 정의는 [GLOSSARY.md](GLOSSARY.md)를 참고하세요.
 
-| Path | Purpose |
+## 프로젝트 구조
+
+| 경로 | 역할 |
 |---|---|
-| `src/http-server.ts` | Stateless Streamable HTTP, OAuth routing, and health endpoint |
-| `src/mcp-server.ts` | MCP server metadata and tool registration |
-| `src/application-control.ts` | Shared admission, request lifetime, normal close, and retryable emergency stop |
-| `src/host-execution.ts` | Command and script execution, initial process results, and managed executable calls |
-| `src/exec-tools.ts` | Command, script, and long-running process tools |
-| `src/file-service.ts` | File reading, writing, transfer, and path operations |
-| `src/file-tools.ts` | Filesystem tools and input schemas |
-| `src/image-reader.ts`, `src/image-tools.ts` | Bounded original PNG validation and image content |
-| `src/screen-capture.ts`, `src/screen-tools.ts` | Managed captures and capture tool schemas |
-| `src/native/screen-capture.swift` | macOS display/window discovery and screenshot capture |
-| `scripts/build-native.mjs` | Production native helper build |
-| `src/oauth.ts` | DCR, PKCE, token issuance/refresh/revocation, and approval UI |
-| `src/oauth-store.ts` | Persistent client registrations, token hashes, and absolute session deadlines |
-| `src/oauth-approval.ts` | Request binding, inspection order, approval deadline, and single-use delivery |
-| `src/oauth-pages.ts` | Password and terminal approval HTML |
-| `src/operator-console.ts` | Local stream adapter for approval, rejection, and emergency stop |
-| `deploy/` | systemd, environment-file, and Nginx examples |
-| `test/all-tools.integration.test.ts` | E2E tests for all 23 tools and external endpoints |
-| `test/execution-lifecycle.integration.test.ts` | MCP execution cleanup and emergency-stop regression tests |
-| `test/fixtures/` | Test-only executable fixtures |
-| `test/` | Configuration, file, process, MCP, and OAuth unit/integration tests |
+| `start.sh` | Mac용 시작 스크립트와 ngrok 실행 |
+| `src/operator-console.ts` | 터미널 대시보드와 승인·해제 명령 |
+| `src/application-control.ts` | 접근 허용, 연결 해제, 종료 흐름 |
+| `src/http-server.ts`, `src/mcp-server.ts` | HTTP 요청 처리와 MCP 도구 등록 |
+| `src/oauth*.ts` | OAuth 승인, 토큰, 상태 저장 |
+| `src/host-execution.ts`, `src/process-manager.ts` | 명령 실행과 프로세스 수명 관리 |
+| `src/file-service.ts`, `src/file-tools.ts` | 파일 작업 |
+| `src/image*.ts`, `src/screen*.ts` | 이미지 반환과 화면 캡처 |
+| `src/native/screen-capture.swift` | macOS 네이티브 캡처 도우미 |
+| `scripts/build-native.mjs` | 네이티브 도우미 빌드 |
+| `deploy/`, `tunneling/` | 서버 배포 예시 |
+| `test/` | 테스트·fixture·진단 코드 |
 
-## License
+내부 서비스 이름과 일부 경로의 `cokacremote`, `remote-dev-mcp` 표기는 원본과의 호환성을 위해 유지하고 있습니다.
 
-[MIT License](LICENSE)
+## 출처와 라이선스
 
-## Disclaimer
+- 원본 프로젝트: [kstost/cokacremote](https://github.com/kstost/cokacremote)
+- 이 변용 프로젝트: [CJH1594/mac-mcp-bridge](https://github.com/CJH1594/mac-mcp-bridge)
+- 라이선스: [MIT](LICENSE)
 
-THIS SOFTWARE IS PROVIDED “AS IS,” WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
-
-IN NO EVENT SHALL THE AUTHOR, COPYRIGHT HOLDERS, OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF THE SOFTWARE.
-
-This includes, but is not limited to:
-
-* Data loss or corruption
-* System damage or malfunction
-* Security breaches or vulnerabilities
-* Financial loss
-* Direct, indirect, incidental, special, punitive, or consequential damages
-
-The user assumes full responsibility for all consequences arising from the use of this software, whether such use was intended, authorized, or foreseeable.
-
-**ALL RISKS ASSOCIATED WITH USE ARE BORNE BY THE USER**
-
-With `start.sh`, request logs are written to `~/.cokacremote/server.log` (mode 600), while approval input/output stays on the terminal. The launcher uses the previously selected folder with `./start.sh --reuse-last`.
+소프트웨어는 보증 없이 제공됩니다. 구체적인 권리와 면책 조건은 원문 [LICENSE](LICENSE)를 확인하세요.
